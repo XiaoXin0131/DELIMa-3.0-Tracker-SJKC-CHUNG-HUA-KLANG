@@ -165,21 +165,74 @@ export default function App() {
         const res = await fetch(`/api/sheet?url=${encodeURIComponent(trimmed)}`, {
           cache: 'no-store',
         });
-        const data = (await res.json()) as {
-          csv?: string;
-          spreadsheetId?: string | null;
-          error?: string;
-        };
+        const contentType = res.headers.get('content-type') || '';
 
-        if (!res.ok || !data.csv) {
-          setSyncError(data.error || 'Gagal memuat turun data dari Google Sheet.');
-          return;
+        let csvText: string | undefined;
+        let resolvedSpreadsheetId: string | null = null;
+
+        if (contentType.includes('application/json')) {
+          const data = (await res.json()) as {
+            csv?: string;
+            spreadsheetId?: string | null;
+            error?: string;
+          };
+
+          if (!res.ok || !data.csv) {
+            setSyncError(data.error || 'Gagal memuat turun data dari Google Sheet.');
+            return;
+          }
+          csvText = data.csv;
+          resolvedSpreadsheetId = data.spreadsheetId ?? null;
+        } else {
+          // Static host fallback when /api/sheet returns HTML (e.g. functions not yet deployed)
+          const info = extractGoogleSheetInfo(trimmed);
+          if (!info) {
+            setSyncError('Pautan Google Sheet tidak sah.');
+            return;
+          }
+
+          const directUrls: string[] = [];
+          if (info.spreadsheetId) {
+            const gvizBase = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(info.spreadsheetId)}/gviz/tq?tqx=out:csv`;
+            directUrls.push(info.gid ? `${gvizBase}&gid=${encodeURIComponent(info.gid)}` : gvizBase);
+          }
+          directUrls.push(info.csvUrl);
+
+          let fetchedCsv: string | null = null;
+          for (const candidateUrl of directUrls) {
+            try {
+              const directRes = await fetch(candidateUrl, { cache: 'no-store' });
+              if (!directRes.ok) continue;
+              const directType = directRes.headers.get('content-type') || '';
+              const directText = await directRes.text();
+              if (
+                !directType.includes('text/html') &&
+                !directText.trimStart().toLowerCase().startsWith('<!doctype html') &&
+                !directText.trimStart().toLowerCase().startsWith('<html')
+              ) {
+                fetchedCsv = directText;
+                break;
+              }
+            } catch {
+              // Try next fallback URL or show helpful guidance below
+            }
+          }
+
+          if (!fetchedCsv) {
+            setSyncError(
+              'Pelayan API (/api/sheet) belum aktif pada hos ini. Pastikan folder "netlify/functions" dan fail "netlify.toml" telah dimasukkan ke GitHub dan di-deploy semula di Netlify, atau guna pautan "Publish to the web (CSV)" Google Sheets.'
+            );
+            return;
+          }
+
+          csvText = fetchedCsv;
+          resolvedSpreadsheetId = info.spreadsheetId ?? null;
         }
 
         const info = extractGoogleSheetInfo(trimmed);
-        const shareId = data.spreadsheetId || info?.spreadsheetId || trimmed;
+        const shareId = resolvedSpreadsheetId || info?.spreadsheetId || trimmed;
 
-        const applied = applyParsedCsv(data.csv, 'Google Sheet', trimmed, shareId);
+        const applied = applyParsedCsv(csvText, 'Google Sheet', trimmed, shareId);
         if (applied) {
           if (persistToServer && adminSecret) {
             void fetch('/api/sheet-config', {
@@ -214,8 +267,9 @@ export default function App() {
 
     void (async () => {
       try {
-        const res = await fetch('/api/sheet-config');
-        if (!res.ok) return;
+        const res = await fetch('/api/sheet-config', { cache: 'no-store' });
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('application/json')) return;
         const cfg = (await res.json()) as { sheetUrl?: string | null };
         if (cfg.sheetUrl) {
           setSheetUrlInput(cfg.sheetUrl);

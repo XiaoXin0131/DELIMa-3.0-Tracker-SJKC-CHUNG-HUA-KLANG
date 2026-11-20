@@ -26,6 +26,18 @@ function readServerSheetConfig(): ServerSheetConfig {
   } catch {
     // Ignore invalid config file
   }
+
+  const defaultSheetUrl = process.env.DEFAULT_SHEET_URL?.trim();
+  if (defaultSheetUrl) {
+    const info = extractGoogleSheetInfo(defaultSheetUrl);
+    if (info) {
+      return {
+        sheetUrl: defaultSheetUrl,
+        spreadsheetId: info.spreadsheetId ?? null,
+      };
+    }
+  }
+
   return { sheetUrl: null, spreadsheetId: null };
 }
 
