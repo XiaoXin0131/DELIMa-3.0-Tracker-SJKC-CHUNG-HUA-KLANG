@@ -1,0 +1,8 @@
+{
+  "name": "DELIMa 3.0 Tracker — SJKC Chung Hua, Klang",
+  "description": "Portal semakan murid belum log masuk DELIMa 3.0 dan penjanaan senarai WhatsApp untuk guru SJKC Chung Hua, Klang.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
