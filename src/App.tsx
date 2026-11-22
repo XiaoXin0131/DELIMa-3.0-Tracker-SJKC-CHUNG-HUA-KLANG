@@ -25,6 +25,7 @@ interface PersistedState {
   sheetUrl: string;
   shareParam: string | null;
   parseMeta: Omit<SheetParseResult, 'students'> | null;
+  lastUpdatedAt: string | null;
 }
 
 function loadInitialState(): { state: PersistedState; pendingResyncUrl: string | null } {
@@ -49,6 +50,7 @@ function loadInitialState(): { state: PersistedState; pendingResyncUrl: string |
             sheetUrl: legacy.sheetUrl || '',
             shareParam: legacy.shareParam || null,
             parseMeta: null,
+            lastUpdatedAt: null,
           },
           pendingResyncUrl: legacy.sheetUrl || legacy.shareParam || null,
         };
@@ -65,6 +67,7 @@ function loadInitialState(): { state: PersistedState; pendingResyncUrl: string |
       sheetUrl: '',
       shareParam: null,
       parseMeta: null,
+      lastUpdatedAt: null,
     },
     pendingResyncUrl: null,
   };
@@ -81,6 +84,9 @@ export default function App() {
   const [shareParam, setShareParam] = useState<string | null>(initialState.shareParam);
   const [parseMeta, setParseMeta] = useState<Omit<SheetParseResult, 'students'> | null>(
     initialState.parseMeta
+  );
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(
+    initialState.lastUpdatedAt ?? null
   );
   const [classQuery, setClassQuery] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -108,7 +114,8 @@ export default function App() {
       rawCsv: string,
       nextSourceName: string,
       nextSheetUrl: string,
-      nextShareParam: string | null
+      nextShareParam: string | null,
+      fetchedAt?: string
     ) => {
       const rows = parseDelimitedRows(rawCsv);
       const result = mapRowsToStudents(rows);
@@ -126,12 +133,14 @@ export default function App() {
         hasHeader: result.hasHeader,
         detectedColumns: result.detectedColumns,
       };
+      const updatedTimestamp = fetchedAt || new Date().toISOString();
 
       setStudents(result.students);
       setSourceName(nextSourceName);
       setSheetUrlInput(nextSheetUrl);
       setShareParam(nextShareParam);
       setParseMeta(meta);
+      setLastUpdatedAt(updatedTimestamp);
       setSyncError(null);
 
       // Clear active class if it was selected previously but no longer exists in the new sheet
@@ -147,6 +156,7 @@ export default function App() {
         sheetUrl: nextSheetUrl,
         shareParam: nextShareParam,
         parseMeta: meta,
+        lastUpdatedAt: updatedTimestamp,
       });
 
       return true;
@@ -169,11 +179,13 @@ export default function App() {
 
         let csvText: string | undefined;
         let resolvedSpreadsheetId: string | null = null;
+        let fetchedAt: string | undefined;
 
         if (contentType.includes('application/json')) {
           const data = (await res.json()) as {
             csv?: string;
             spreadsheetId?: string | null;
+            fetchedAt?: string;
             error?: string;
           };
 
@@ -183,6 +195,7 @@ export default function App() {
           }
           csvText = data.csv;
           resolvedSpreadsheetId = data.spreadsheetId ?? null;
+          fetchedAt = data.fetchedAt;
         } else {
           // Static host fallback when /api/sheet returns HTML (e.g. functions not yet deployed)
           const info = extractGoogleSheetInfo(trimmed);
@@ -227,12 +240,13 @@ export default function App() {
 
           csvText = fetchedCsv;
           resolvedSpreadsheetId = info.spreadsheetId ?? null;
+          fetchedAt = new Date().toISOString();
         }
 
         const info = extractGoogleSheetInfo(trimmed);
         const shareId = resolvedSpreadsheetId || info?.spreadsheetId || trimmed;
 
-        const applied = applyParsedCsv(csvText, 'Google Sheet', trimmed, shareId);
+        const applied = applyParsedCsv(csvText, 'Google Sheet', trimmed, shareId, fetchedAt);
         if (applied) {
           if (persistToServer && adminSecret) {
             void fetch('/api/sheet-config', {
@@ -299,6 +313,7 @@ export default function App() {
     setSheetUrlInput('');
     setShareParam(null);
     setParseMeta(null);
+    setLastUpdatedAt(null);
     setSyncError(null);
     setClassQuery('');
     persistState({
@@ -307,6 +322,7 @@ export default function App() {
       sheetUrl: '',
       shareParam: null,
       parseMeta: null,
+      lastUpdatedAt: null,
     });
     if (adminSecret) {
       void fetch('/api/sheet-config', {
@@ -344,6 +360,9 @@ export default function App() {
               classQuery={classQuery}
               onClassQueryChange={setClassQuery}
               onOpenAnalytics={() => setActiveTab('analytics')}
+              lastUpdatedAt={lastUpdatedAt}
+              isSyncing={isSyncing}
+              sourceName={sourceName}
             />
           )}
 

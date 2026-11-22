@@ -10,11 +10,13 @@ import {
   EyeOff,
   Users,
   ArrowRight,
+  Clock,
 } from 'lucide-react';
 import {
   ClassSummary,
   StudentRecord,
   filterStudentsByClass,
+  formatLastUpdatedTimestamp,
   formatWhatsAppList,
   normalizeClassName,
 } from '../utils/sheetParser';
@@ -25,6 +27,9 @@ interface ClassLookupViewProps {
   classQuery: string;
   onClassQueryChange: (val: string) => void;
   onOpenAnalytics: () => void;
+  lastUpdatedAt: string | null;
+  isSyncing: boolean;
+  sourceName: string;
 }
 
 async function copyTextSafely(text: string): Promise<boolean> {
@@ -59,6 +64,9 @@ export const ClassLookupView: React.FC<ClassLookupViewProps> = ({
   classQuery,
   onClassQueryChange,
   onOpenAnalytics,
+  lastUpdatedAt,
+  isSyncing,
+  sourceName,
 }) => {
   const [studentSearch, setStudentSearch] = useState('');
   const [showStudentIds, setShowStudentIds] = useState(true);
@@ -104,6 +112,10 @@ export const ClassLookupView: React.FC<ClassLookupViewProps> = ({
   };
 
   const activeNormalized = normalizeClassName(matchedClassName || classQuery);
+  const formattedLastUpdated = useMemo(
+    () => formatLastUpdatedTimestamp(lastUpdatedAt),
+    [lastUpdatedAt]
+  );
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -123,6 +135,24 @@ export const ClassLookupView: React.FC<ClassLookupViewProps> = ({
               Masukkan nama kelas untuk memaparkan senarai murid yang masih belum log masuk serta
               jana mesej WhatsApp sedia hantar kepada ibu bapa.
             </p>
+            <div
+              data-testid="last-updated-info"
+              className="pt-1 flex items-center gap-1.5 text-xs text-slate-600"
+            >
+              <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              {isSyncing ? (
+                <span>Sedang mengemas kini data terkini...</span>
+              ) : formattedLastUpdated ? (
+                <span>
+                  Kemas kini data terakhir:{' '}
+                  <strong className="font-semibold text-slate-800">{formattedLastUpdated}</strong>
+                </span>
+              ) : (
+                <span>
+                  Sumber aktif: <strong className="font-semibold text-slate-800">{sourceName}</strong>
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="w-full lg:w-[340px] shrink-0">

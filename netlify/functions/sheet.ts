@@ -69,6 +69,7 @@ export default async function handler(req: Request): Promise<Response> {
       spreadsheetId: info.spreadsheetId ?? null,
       gid: info.gid ?? null,
       csvUrl: info.csvUrl,
+      fetchedAt: new Date().toISOString(),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Ralat rangkaian tidak diketahui';

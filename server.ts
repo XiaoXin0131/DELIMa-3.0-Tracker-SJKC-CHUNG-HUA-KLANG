@@ -145,6 +145,7 @@ app.get('/api/sheet', async (req, res) => {
       spreadsheetId: info.spreadsheetId ?? null,
       gid: info.gid ?? null,
       csvUrl: info.csvUrl,
+      fetchedAt: new Date().toISOString(),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Ralat rangkaian tidak diketahui';

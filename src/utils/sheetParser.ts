@@ -400,3 +400,23 @@ export function formatWhatsAppList(
 
   return lines.join('\n');
 }
+
+export function formatLastUpdatedTimestamp(
+  isoTimestamp: string | null | undefined,
+  timeZone = 'Asia/Kuala_Lumpur'
+): string | null {
+  if (!isoTimestamp) return null;
+  const parsed = new Date(isoTimestamp);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return new Intl.DateTimeFormat('ms-MY', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone,
+  }).format(parsed);
+}
+

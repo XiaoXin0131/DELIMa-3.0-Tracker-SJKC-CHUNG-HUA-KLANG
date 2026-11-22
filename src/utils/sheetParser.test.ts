@@ -7,6 +7,7 @@ import {
   filterStudentsByClass,
   computeClassSummaries,
   formatWhatsAppList,
+  formatLastUpdatedTimestamp,
   verifyAdminPassword,
 } from './sheetParser';
 
@@ -140,3 +141,13 @@ test('formatWhatsAppList produces exact requested format with WhatsApp bold mark
 
   assert.equal(msg, expected);
 });
+
+test('formatLastUpdatedTimestamp formats valid ISO timestamps in MY time and rejects invalid input', () => {
+  const formatted = formatLastUpdatedTimestamp('2026-11-22T03:28:00.000Z', 'Asia/Kuala_Lumpur');
+  assert.ok(formatted);
+  assert.match(formatted, /22 Nov 2026/);
+  assert.match(formatted, /11:28/);
+  assert.equal(formatLastUpdatedTimestamp(null), null);
+  assert.equal(formatLastUpdatedTimestamp('not-a-date'), null);
+});
+
