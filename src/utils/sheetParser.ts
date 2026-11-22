@@ -17,6 +17,7 @@ export interface SheetParseResult {
   totalRowsRead: number;
   loggedInFilteredCount: number;
   hasHeader: boolean;
+  sheetUpdatedAt: string | null;
   detectedColumns: {
     classCol: number;
     nameCol: number;
@@ -192,6 +193,76 @@ function matchesWholeKeyword(header: string, keywords: string[]): boolean {
   });
 }
 
+const UPDATED_AT_KEYWORDS = [
+  'tarikh kemas kini',
+  'masa kemas kini',
+  'kemas kini terakhir',
+  'dikemas kini',
+  'kemas kini',
+  'kemaskini',
+  'tarikh update',
+  'masa update',
+  'last updated',
+  'last update',
+  'updated at',
+  'updated',
+];
+
+const INLINE_UPDATED_PATTERN =
+  /^(?:tarikh\s+kemas\s*kini|masa\s+kemas\s*kini|kemas\s*kini(?:\s+terakhir)?|dikemas\s*kini(?:\s+pada)?|tarikh\s+update|masa\s+update|last\s+updated?|updated(?:\s+at)?)\s*[:=\-–]\s*(.+)$/i;
+
+function rowHasTableHeaderKeywords(row: string[]): boolean {
+  const hasClass = row.some((h) =>
+    matchesWholeKeyword(h, ['nama kelas', 'kelas', 'class', 'darjah', 'tingkatan', 'tahun'])
+  );
+  const hasName = row.some((h) =>
+    matchesWholeKeyword(h, ['nama murid', 'nama penuh', 'student name', 'murid', 'nama'])
+  );
+  return hasClass && hasName;
+}
+
+function inspectRowForUpdatedMetadata(row: string[]): {
+  isStandaloneMetadataRow: boolean;
+  updatedValue: string | null;
+} {
+  let updatedValue: string | null = null;
+  const nonEmptyCells = row.map((c) => c.trim()).filter(Boolean);
+  if (nonEmptyCells.length === 0) {
+    return { isStandaloneMetadataRow: false, updatedValue: null };
+  }
+
+  for (const cell of nonEmptyCells) {
+    const match = cell.match(INLINE_UPDATED_PATTERN);
+    if (match && match[1]?.trim()) {
+      updatedValue = match[1].trim();
+      break;
+    }
+  }
+
+  const isTableHeader = rowHasTableHeaderKeywords(row);
+  if (!isTableHeader) {
+    if (nonEmptyCells.length === 1 && updatedValue) {
+      return { isStandaloneMetadataRow: true, updatedValue };
+    }
+
+    const firstCell = nonEmptyCells[0];
+    if (
+      nonEmptyCells.length <= 2 &&
+      (INLINE_UPDATED_PATTERN.test(firstCell) ||
+        matchesWholeKeyword(firstCell, UPDATED_AT_KEYWORDS))
+    ) {
+      const valueFromSecond =
+        updatedValue ?? (nonEmptyCells.length === 2 ? nonEmptyCells[1] : null);
+      return {
+        isStandaloneMetadataRow: true,
+        updatedValue: valueFromSecond || null,
+      };
+    }
+  }
+
+  return { isStandaloneMetadataRow: false, updatedValue };
+}
+
 export function mapRowsToStudents(rows: string[][]): SheetParseResult {
   if (rows.length === 0) {
     return {
@@ -199,14 +270,46 @@ export function mapRowsToStudents(rows: string[][]): SheetParseResult {
       totalRowsRead: 0,
       loggedInFilteredCount: 0,
       hasHeader: false,
+      sheetUpdatedAt: null,
       detectedColumns: { classCol: 0, nameCol: 1, idCol: 2, statusCol: -1 },
     };
   }
 
-  const firstRow = rows[0].map((cell) => cell.trim());
+  let sheetUpdatedAt: string | null = null;
+  const contentRows: string[][] = [];
 
-  let classCol = firstRow.findIndex((h) =>
-    matchesWholeKeyword(h, ['nama kelas', 'kelas', 'class', 'darjah', 'tingkatan', 'tahun'])
+  for (const row of rows) {
+    const meta = inspectRowForUpdatedMetadata(row);
+    if (!sheetUpdatedAt && meta.updatedValue) {
+      sheetUpdatedAt = meta.updatedValue;
+    }
+    if (meta.isStandaloneMetadataRow) {
+      continue;
+    }
+    contentRows.push(row);
+  }
+
+  if (contentRows.length === 0) {
+    return {
+      students: [],
+      totalRowsRead: 0,
+      loggedInFilteredCount: 0,
+      hasHeader: false,
+      sheetUpdatedAt,
+      detectedColumns: { classCol: 0, nameCol: 1, idCol: 2, statusCol: -1 },
+    };
+  }
+
+  const firstRow = contentRows[0].map((cell) => cell.trim());
+
+  const updatedCol = firstRow.findIndex(
+    (h) => !INLINE_UPDATED_PATTERN.test(h) && matchesWholeKeyword(h, UPDATED_AT_KEYWORDS)
+  );
+
+  let classCol = firstRow.findIndex(
+    (h, idx) =>
+      idx !== updatedCol &&
+      matchesWholeKeyword(h, ['nama kelas', 'kelas', 'class', 'darjah', 'tingkatan', 'tahun'])
   );
 
   // Match explicit ID / DELIMa / Email headers first using whole-word boundaries
@@ -214,6 +317,7 @@ export function mapRowsToStudents(rows: string[][]): SheetParseResult {
   let idCol = firstRow.findIndex(
     (h, idx) =>
       idx !== classCol &&
+      idx !== updatedCol &&
       matchesWholeKeyword(h, [
         'id delima',
         'delima id',
@@ -233,6 +337,7 @@ export function mapRowsToStudents(rows: string[][]): SheetParseResult {
     (h, idx) =>
       idx !== classCol &&
       idx !== idCol &&
+      idx !== updatedCol &&
       matchesWholeKeyword(h, ['nama murid', 'nama penuh', 'student name', 'murid', 'nama'])
   );
 
@@ -241,6 +346,7 @@ export function mapRowsToStudents(rows: string[][]): SheetParseResult {
       idx !== classCol &&
       idx !== nameCol &&
       idx !== idCol &&
+      idx !== updatedCol &&
       matchesWholeKeyword(h, ['status', 'status log masuk', 'log masuk', 'login', 'catatan'])
   );
 
@@ -249,27 +355,42 @@ export function mapRowsToStudents(rows: string[][]): SheetParseResult {
   if (!hasHeader) {
     classCol = 0;
     nameCol = 1;
-    idCol = rows[0].length >= 3 ? 2 : -1;
+    idCol = contentRows[0].length >= 3 ? 2 : -1;
   } else {
     if (classCol === -1) classCol = 0;
     if (nameCol === -1) {
       nameCol =
-        [0, 1, 2, 3].find((idx) => idx < firstRow.length && idx !== classCol && idx !== idCol) ?? 1;
+        [0, 1, 2, 3].find(
+          (idx) => idx < firstRow.length && idx !== classCol && idx !== idCol && idx !== updatedCol
+        ) ?? 1;
     }
     if (idCol === -1 && firstRow.length >= 3) {
       const candidate = [0, 1, 2, 3].find(
-        (idx) => idx < firstRow.length && idx !== classCol && idx !== nameCol && idx !== statusCol
+        (idx) =>
+          idx < firstRow.length &&
+          idx !== classCol &&
+          idx !== nameCol &&
+          idx !== statusCol &&
+          idx !== updatedCol
       );
       idCol = candidate ?? -1;
     }
   }
 
-  const dataRows = hasHeader ? rows.slice(1) : rows;
+  const dataRows = hasHeader ? contentRows.slice(1) : contentRows;
   const students: StudentRecord[] = [];
   let loggedInFilteredCount = 0;
 
   for (let i = 0; i < dataRows.length; i += 1) {
     const row = dataRows[i];
+    if (!sheetUpdatedAt && updatedCol >= 0) {
+      const rawUpdated = (row[updatedCol] ?? '').trim();
+      if (rawUpdated) {
+        const inlineMatch = rawUpdated.match(INLINE_UPDATED_PATTERN);
+        sheetUpdatedAt = inlineMatch?.[1]?.trim() || rawUpdated;
+      }
+    }
+
     const rawClass = row[classCol] ?? '';
     const rawName = row[nameCol] ?? '';
     const rawId = idCol >= 0 ? (row[idCol] ?? '') : '';
@@ -300,6 +421,7 @@ export function mapRowsToStudents(rows: string[][]): SheetParseResult {
     totalRowsRead: dataRows.length,
     loggedInFilteredCount,
     hasHeader,
+    sheetUpdatedAt,
     detectedColumns: { classCol, nameCol, idCol, statusCol },
   };
 }

@@ -27,6 +27,7 @@ interface ClassLookupViewProps {
   classQuery: string;
   onClassQueryChange: (val: string) => void;
   onOpenAnalytics: () => void;
+  sheetUpdatedAt: string | null;
   lastUpdatedAt: string | null;
   isSyncing: boolean;
   sourceName: string;
@@ -64,6 +65,7 @@ export const ClassLookupView: React.FC<ClassLookupViewProps> = ({
   classQuery,
   onClassQueryChange,
   onOpenAnalytics,
+  sheetUpdatedAt,
   lastUpdatedAt,
   isSyncing,
   sourceName,
@@ -112,10 +114,15 @@ export const ClassLookupView: React.FC<ClassLookupViewProps> = ({
   };
 
   const activeNormalized = normalizeClassName(matchedClassName || classQuery);
-  const formattedLastUpdated = useMemo(
+  const formattedLocalImportTime = useMemo(
     () => formatLastUpdatedTimestamp(lastUpdatedAt),
     [lastUpdatedAt]
   );
+  const displayedAdminUpdateTime =
+    sheetUpdatedAt ||
+    (sourceName !== 'Google Sheet' && sourceName !== 'Data Contoh'
+      ? formattedLocalImportTime
+      : null);
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -141,11 +148,13 @@ export const ClassLookupView: React.FC<ClassLookupViewProps> = ({
             >
               <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               {isSyncing ? (
-                <span>Sedang mengemas kini data terkini...</span>
-              ) : formattedLastUpdated ? (
+                <span>Sedang menyemak data terkini...</span>
+              ) : displayedAdminUpdateTime ? (
                 <span>
                   Kemas kini data terakhir:{' '}
-                  <strong className="font-semibold text-slate-800">{formattedLastUpdated}</strong>
+                  <strong className="font-semibold text-slate-800">
+                    {displayedAdminUpdateTime}
+                  </strong>
                 </span>
               ) : (
                 <span>

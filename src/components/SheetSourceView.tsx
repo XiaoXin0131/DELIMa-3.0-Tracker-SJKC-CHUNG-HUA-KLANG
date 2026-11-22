@@ -251,7 +251,9 @@ export const SheetSourceView: React.FC<SheetSourceViewProps> = ({
             Dalam Google Sheet anda, klik <strong>Share</strong> → tukar General Access kepada{' '}
             <strong>Anyone with the link (Viewer)</strong>, kemudian salin dan tampal pautannya di
             bawah. Pastikan lajur mengandungi <strong>Kelas</strong>, <strong>Nama Murid</strong>,
-            dan <strong>ID Murid</strong>.
+            dan <strong>ID Murid</strong>. Untuk memaparkan masa kemas kini admin kepada semua guru,
+            taip <strong>Kemas Kini: 22 Nov 2026, 8:30 PG</strong> pada sel sebelah tajuk (cth. D1)
+            atau di baris paling atas Google Sheet anda.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-2.5">
@@ -331,6 +333,9 @@ export const SheetSourceView: React.FC<SheetSourceViewProps> = ({
             <span>Lajur Nama: #{parseMeta.detectedColumns.nameCol + 1}</span>
             {parseMeta.detectedColumns.idCol >= 0 && (
               <span>Lajur ID: #{parseMeta.detectedColumns.idCol + 1}</span>
+            )}
+            {parseMeta.sheetUpdatedAt && (
+              <span>Masa Kemas Kini: {parseMeta.sheetUpdatedAt}</span>
             )}
           </div>
         )}

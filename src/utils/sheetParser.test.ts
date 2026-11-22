@@ -151,3 +151,32 @@ test('formatLastUpdatedTimestamp formats valid ISO timestamps in MY time and rej
   assert.equal(formatLastUpdatedTimestamp('not-a-date'), null);
 });
 
+test('mapRowsToStudents extracts sheetUpdatedAt from standalone metadata row, inline header cell, or dedicated column', () => {
+  // 1. Standalone metadata row above headers
+  const topRowSheet = mapRowsToStudents([
+    ['Kemas Kini', '22 Nov 2026, 8:30 PG'],
+    ['Kelas', 'Nama Murid', 'ID DELIMa'],
+    ['1A', 'CHAN KAI SHENG', 'm-101@moe-dl.edu.my'],
+  ]);
+  assert.equal(topRowSheet.sheetUpdatedAt, '22 Nov 2026, 8:30 PG');
+  assert.equal(topRowSheet.students.length, 1);
+  assert.equal(topRowSheet.students[0].className, '1A');
+
+  // 2. Inline cell next to headers (e.g. D1)
+  const inlineCellSheet = mapRowsToStudents([
+    ['Kelas', 'Nama Murid', 'ID DELIMa', 'Kemas Kini: 22/11/2026 9:00 AM'],
+    ['2A', 'ENYA NG', 'm-201@moe-dl.edu.my'],
+  ]);
+  assert.equal(inlineCellSheet.sheetUpdatedAt, '22/11/2026 9:00 AM');
+  assert.equal(inlineCellSheet.students.length, 1);
+
+  // 3. Dedicated Tarikh Kemas Kini column
+  const colSheet = mapRowsToStudents([
+    ['Kelas', 'Nama Murid', 'ID DELIMa', 'Tarikh Kemas Kini'],
+    ['3A', 'YAP HONG YI', 'm-301@moe-dl.edu.my', '22 Nov 2026, 10:15 PG'],
+  ]);
+  assert.equal(colSheet.sheetUpdatedAt, '22 Nov 2026, 10:15 PG');
+  assert.equal(colSheet.students.length, 1);
+});
+
+

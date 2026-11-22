@@ -131,6 +131,7 @@ export default function App() {
         totalRowsRead: result.totalRowsRead,
         loggedInFilteredCount: result.loggedInFilteredCount,
         hasHeader: result.hasHeader,
+        sheetUpdatedAt: result.sheetUpdatedAt,
         detectedColumns: result.detectedColumns,
       };
       const updatedTimestamp = fetchedAt || new Date().toISOString();
@@ -360,6 +361,7 @@ export default function App() {
               classQuery={classQuery}
               onClassQueryChange={setClassQuery}
               onOpenAnalytics={() => setActiveTab('analytics')}
+              sheetUpdatedAt={parseMeta?.sheetUpdatedAt ?? null}
               lastUpdatedAt={lastUpdatedAt}
               isSyncing={isSyncing}
               sourceName={sourceName}
